@@ -1,0 +1,9 @@
+torch==2.8.0.dev20250403
+torchvision==0.22.0.dev20250403
+torchaudio==2.6.0.dev20250403
+# Rest of Dependencies
+claudette
+colpali-engine
+srsly
+pdf2image
+python-fasthtml
