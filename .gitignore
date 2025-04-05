@@ -5,3 +5,5 @@ __pycache__
 static/output.css
 package-lock.json
 node_modules
+.byaldi
+uploads
