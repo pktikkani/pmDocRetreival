@@ -21,400 +21,82 @@ uploads_dir.mkdir(exist_ok=True)
 
 
 
-# Function to resize an image to fit within Claude's 5MB limit
-def resize_image_for_claude(image_bytes):
-    """
-    Resize an image to fit within Claude's 5MB limit with a safety margin
-    """
-    # Load the image from bytes
-    img = Image.open(io.BytesIO(image_bytes))
-
-    # Define max size (4.7MB to allow for overhead when sending)
-    MAX_SIZE_BYTES = 4.7 * 1024 * 1024
-
-    # Start with original size
-    quality = 90  # Start with slightly lower quality
-    output = io.BytesIO()
-
-    # Try to compress the image while keeping its dimensions
-    img.save(output, format='JPEG', quality=quality)
-
-    # If the image is still too large, reduce quality
-    while output.tell() > MAX_SIZE_BYTES and quality > 10:
-        output = io.BytesIO()
-        quality -= 10
-        print(f"Reducing image quality to {quality}")
-        img.save(output, format='JPEG', quality=quality)
-
-    # If reducing quality didn't work, resize the image
-    if output.tell() > MAX_SIZE_BYTES:
-        # Calculate new dimensions while maintaining aspect ratio
-        aspect = img.width / img.height
-
-        # Start with a reasonable reduction
-        scale_factor = 0.8
-        new_width = int(img.width * scale_factor)
-        new_height = int(new_width / aspect)
-
-        while output.tell() > MAX_SIZE_BYTES and new_width > 100:
-            # Resize the image
-            print(f"Resizing image to {new_width}x{new_height}")
-            resized_img = img.resize((new_width, new_height), Image.LANCZOS)
-
-            # Save to buffer
-            output = io.BytesIO()
-            resized_img.save(output, format='JPEG', quality=quality)
-
-            # Further reduce dimensions if needed
-            scale_factor *= 0.8
-            new_width = int(img.width * scale_factor)
-            new_height = int(new_width / aspect)
-
-    # Final size check
-    output.seek(0)
-    final_size = output.tell()
-    print(f"Final image size: {final_size / (1024 * 1024):.2f} MB")
-
-    if final_size > 5 * 1024 * 1024:
-        print("Warning: Image is still too large for Claude API")
-
-        # Last resort: force a smaller size with lower quality
-        output = io.BytesIO()
-        max_dimension = 1000  # Set a hard maximum dimension
-        if img.width > img.height:
-            new_size = (max_dimension, int(max_dimension / aspect))
-        else:
-            new_size = (int(max_dimension * aspect), max_dimension)
-
-        resized_img = img.resize(new_size, Image.LANCZOS)
-        resized_img.save(output, format='JPEG', quality=60)
-        output.seek(0)
-        print(f"Emergency resize: {output.tell() / (1024 * 1024):.2f} MB")
-
-    return output.getvalue()
+# # Function to resize an image to fit within Claude's 5MB limit
+# def resize_image_for_claude(image_bytes):
+#     """
+#     Resize an image to fit within Claude's 5MB limit with a safety margin
+#     """
+#     # Load the image from bytes
+#     img = Image.open(io.BytesIO(image_bytes))
+#
+#     # Define max size (4.7MB to allow for overhead when sending)
+#     MAX_SIZE_BYTES = 4.7 * 1024 * 1024
+#
+#     # Start with original size
+#     quality = 90  # Start with slightly lower quality
+#     output = io.BytesIO()
+#
+#     # Try to compress the image while keeping its dimensions
+#     img.save(output, format='JPEG', quality=quality)
+#
+#     # If the image is still too large, reduce quality
+#     while output.tell() > MAX_SIZE_BYTES and quality > 10:
+#         output = io.BytesIO()
+#         quality -= 10
+#         print(f"Reducing image quality to {quality}")
+#         img.save(output, format='JPEG', quality=quality)
+#
+#     # If reducing quality didn't work, resize the image
+#     if output.tell() > MAX_SIZE_BYTES:
+#         # Calculate new dimensions while maintaining aspect ratio
+#         aspect = img.width / img.height
+#
+#         # Start with a reasonable reduction
+#         scale_factor = 0.8
+#         new_width = int(img.width * scale_factor)
+#         new_height = int(new_width / aspect)
+#
+#         while output.tell() > MAX_SIZE_BYTES and new_width > 100:
+#             # Resize the image
+#             print(f"Resizing image to {new_width}x{new_height}")
+#             resized_img = img.resize((new_width, new_height), Image.LANCZOS)
+#
+#             # Save to buffer
+#             output = io.BytesIO()
+#             resized_img.save(output, format='JPEG', quality=quality)
+#
+#             # Further reduce dimensions if needed
+#             scale_factor *= 0.8
+#             new_width = int(img.width * scale_factor)
+#             new_height = int(new_width / aspect)
+#
+#     # Final size check
+#     output.seek(0)
+#     final_size = output.tell()
+#     print(f"Final image size: {final_size / (1024 * 1024):.2f} MB")
+#
+#     if final_size > 5 * 1024 * 1024:
+#         print("Warning: Image is still too large for Claude API")
+#
+#         # Last resort: force a smaller size with lower quality
+#         output = io.BytesIO()
+#         max_dimension = 1000  # Set a hard maximum dimension
+#         if img.width > img.height:
+#             new_size = (max_dimension, int(max_dimension / aspect))
+#         else:
+#             new_size = (int(max_dimension * aspect), max_dimension)
+#
+#         resized_img = img.resize(new_size, Image.LANCZOS)
+#         resized_img.save(output, format='JPEG', quality=60)
+#         output.seek(0)
+#         print(f"Emergency resize: {output.tell() / (1024 * 1024):.2f} MB")
+#
+#     return output.getvalue()
 
 
 hdrs = (
     Meta(name="viewport", content="width=device-width, initial-scale=1.0"),
-    Script(src="https://cdn.tailwindcss.com"),
-    Link(href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap", rel="stylesheet"),
-    Style("""
-        :root {
-            --primary-blue: #2563eb;
-            --light-blue: #60a5fa;
-            --dark-blue: #1e40af;
-            --text-white: #ffffff;
-            --text-blue-100: #dbeafe;
-            --card-bg: rgba(255, 255, 255, 0.9);
-        }
-
-        body {
-            font-family: 'Inter', sans-serif;
-            background-color: #2563eb; /* Fallback if image doesn't load */
-            background-image: url('/static/background-features.jpg');
-            background-position: center;
-            background-size: cover;
-            background-attachment: fixed;
-            color: var(--text-white);
-        }
-
-        .glass-card {
-            background: rgba(255, 255, 255, 0.9);
-            backdrop-filter: blur(10px);
-            -webkit-backdrop-filter: blur(10px);
-            border: 1px solid rgba(255, 255, 255, 0.3);
-            box-shadow: 0 4px 30px rgba(0, 0, 0, 0.1);
-        }
-
-        .glass-chat {
-            background: rgba(255, 255, 255, 0.8);
-            backdrop-filter: blur(10px);
-            -webkit-backdrop-filter: blur(10px);
-            border: 1px solid rgba(255, 255, 255, 0.3);
-            box-shadow: 0 4px 30px rgba(0, 0, 0, 0.1);
-            border-radius: 1rem;
-            overflow: hidden;
-        }
-
-        .chat-header {
-            background: rgba(37, 99, 235, 0.9);
-            backdrop-filter: blur(8px);
-            -webkit-backdrop-filter: blur(8px);
-            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-        }
-
-        .chat-container {
-            background: rgba(255, 255, 255, 0.6);
-            backdrop-filter: blur(8px);
-            -webkit-backdrop-filter: blur(8px);
-            border: 1px solid rgba(255, 255, 255, 0.3);
-        }
-
-        .chat-footer {
-            background: rgba(255, 255, 255, 0.7);
-            backdrop-filter: blur(8px);
-            -webkit-backdrop-filter: blur(8px);
-            border-top: 1px solid rgba(255, 255, 255, 0.2);
-        }
-
-        .chat-bubble-user {
-            background-color: rgba(243, 244, 246, 0.7);
-            backdrop-filter: blur(4px);
-            -webkit-backdrop-filter: blur(4px);
-            border-radius: 18px 18px 18px 4px;
-            box-shadow: 0 2px 6px rgba(0, 0, 0, 0.05);
-            border: 1px solid rgba(255, 255, 255, 0.3);
-        }
-
-        .chat-bubble-ai {
-            background-color: rgba(219, 234, 254, 0.7);
-            backdrop-filter: blur(4px);
-            -webkit-backdrop-filter: blur(4px);
-            border-radius: 18px 18px 4px 18px;
-            box-shadow: 0 2px 6px rgba(0, 0, 0, 0.05);
-            border: 1px solid rgba(191, 219, 254, 0.3);
-        }
-
-        .fade-in {
-            animation: fadeIn 0.5s ease-in-out;
-        }
-
-        @keyframes fadeIn {
-            from { opacity: 0; transform: translateY(10px); }
-            to { opacity: 1; transform: translateY(0); }
-        }
-
-        .fade-out {
-            animation: fadeOut 0.3s ease-in-out forwards;
-        }
-
-        @keyframes fadeOut {
-            from { opacity: 1; }
-            to { opacity: 0; }
-        }
-
-        .prose pre {
-            background-color: rgba(30, 41, 59, 0.7);
-            color: #e2e8f0;
-            padding: 1rem;
-            border-radius: 0.5rem;
-            overflow-x: auto;
-        }
-
-        .prose code {
-            font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-            font-size: 0.875em;
-        }
-
-        .prose p {
-            margin-bottom: 1rem;
-        }
-
-        .prose h1, .prose h2, .prose h3, .prose h4 {
-            font-weight: 600;
-            margin: 1.5rem 0 1rem 0;
-        }
-
-        .prose ul, .prose ol {
-            padding-left: 2rem;
-            margin-bottom: 1rem;
-        }
-
-        .prose li {
-            margin-bottom: 0.5rem;
-        }
-
-        .upload-zone {
-            position: relative;
-            overflow: hidden;
-            transition: all 0.3s ease;
-        }
-
-        .upload-zone:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
-        }
-
-        .upload-zone::before {
-            content: '';
-            position: absolute;
-            top: 0;
-            left: 0;
-            right: 0;
-            bottom: 0;
-            border-radius: 0.75rem;
-            border: 2px dashed rgba(96, 165, 250, 0.5);
-            pointer-events: none;
-        }
-
-        .btn-primary {
-            background-color: var(--primary-blue);
-            transition: all 0.3s ease;
-        }
-
-        .btn-primary:hover {
-            background-color: var(--dark-blue);
-        }
-
-        .btn-primary:focus {
-            box-shadow: 0 0 0 3px rgba(96, 165, 250, 0.5);
-        }
-
-        /* Loading animation styles */
-        .processing-overlay {
-            position: fixed;
-            top: 0;
-            left: 0;
-            right: 0;
-            bottom: 0;
-            background-color: rgba(15, 23, 42, 0.75);
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            z-index: 50;
-            backdrop-filter: blur(4px);
-        }
-
-        .processing-card {
-            background: white;
-            border-radius: 1rem;
-            padding: 2rem;
-            box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
-            max-width: 24rem;
-            width: 100%;
-            text-align: center;
-        }
-
-        .spinner {
-            display: inline-block;
-            width: 4rem;
-            height: 4rem;
-            border-radius: 50%;
-            border: 4px solid #e2e8f0;
-            border-top-color: #3b82f6;
-            animation: spinner 1s ease-in-out infinite;
-        }
-
-        @keyframes spinner {
-            to { transform: rotate(360deg); }
-        }
-
-        .wave {
-            display: inline-block;
-            animation: wave-animation 1.5s infinite;
-        }
-
-        @keyframes wave-animation {
-            0%, 100% { transform: translateY(0); }
-            50% { transform: translateY(-10px); }
-        }
-
-        .progress-bar {
-            width: 100%;
-            height: 8px;
-            background-color: #e2e8f0;
-            border-radius: 4px;
-            overflow: hidden;
-            margin-top: 1rem;
-        }
-
-        .progress-bar-value {
-            width: 0%;
-            height: 100%;
-            background-color: #3b82f6;
-            border-radius: 4px;
-            transition: width 0.5s ease;
-            animation: progress 3s ease-in-out;
-        }
-
-        @keyframes progress {
-            0% { width: 0%; }
-            50% { width: 70%; }
-            100% { width: 100%; }
-        }
-
-        .pulse {
-            animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
-        }
-
-        @keyframes pulse {
-            0%, 100% {
-                opacity: 1;
-            }
-            50% {
-                opacity: 0.5;
-            }
-        }
-
-        .user-avatar {
-            background-color: #94a3b8;
-        }
-
-        .ai-avatar {
-            background-color: #3b82f6;
-        }
-
-        /* Input styles */
-        .chat-input {
-            background: rgba(255, 255, 255, 0.8);
-            border-radius: 9999px;
-            border: 1px solid rgba(219, 234, 254, 0.5);
-            box-shadow: 0 2px 6px rgba(0, 0, 0, 0.05);
-            padding: 0.75rem 1rem;
-            transition: all 0.2s ease;
-        }
-
-        .chat-input:focus {
-            background: rgba(255, 255, 255, 0.95);
-            border-color: #60a5fa;
-            box-shadow: 0 0 0 3px rgba(96, 165, 250, 0.3);
-        }
-
-        .send-button {
-            background: #3b82f6;
-            border-radius: 9999px;
-            color: white;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            transition: all 0.2s ease;
-            padding: 0.75rem 1.25rem;
-            font-weight: 500;
-        }
-
-        .send-button:hover {
-            background: #2563eb;
-            transform: scale(1.05);
-        }
-
-        .clear-button {
-            background: rgba(255, 255, 255, 0.2);
-            border-radius: 9999px;
-            color: white;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            transition: all 0.2s ease;
-            padding: 0.75rem 1.25rem;
-            border: 1px solid rgba(255, 255, 255, 0.3);
-            font-weight: 500;
-        }
-
-        .clear-button:hover {
-            background: rgba(255, 255, 255, 0.3);
-            transform: scale(1.05);
-        }
-
-        /* Message fade out animation */
-        .message-fade-out {
-            animation: messageFadeOut 0.3s ease-out forwards;
-        }
-
-        @keyframes messageFadeOut {
-            from { opacity: 1; }
-            to { opacity: 0; height: 0; margin: 0; padding: 0; }
-        }
-    """),
+    Link(rel="stylesheet", href="static/output.css", type="text/css"),
     # Add JavaScript for form handling and animation
     Script("""
         document.addEventListener('DOMContentLoaded', function() {
@@ -652,7 +334,7 @@ hdrs = (
         }
 
 
-        // Setup function for chat form submission with animation
+        
         // Setup function for chat form submission with animation
         function setupChatForm() {
             const chatForm = document.querySelector('form[hx-post="/ask"]');
@@ -812,35 +494,36 @@ app, rt = fast_app(hdrs=hdrs, pico=False, live=False)
 
 @rt("/")
 def get():
-    return Titled("",
-                  Div(cls="min-h-screen pt-10 pb-20 px-4 sm:px-6 lg:px-8")(
-                      Div(cls="max-w-4xl mx-auto")(
-                          # Header
-                          Div(cls="text-center mb-16")(
-                              H1(cls="text-5xl font-extrabold tracking-tight text-white sm:text-6xl")(
-                                  "PDF Chat ",
-                                  Span(cls="relative whitespace-nowrap")(
-                                      Svg(cls="absolute top-2/3 left-0 h-[0.58em] w-full fill-white/30",
-                                          aria_hidden="true",
-                                          viewBox="0 0 418 42", preserveAspectRatio="none")(
-                                          Path(
-                                              d="M203.371.916c-26.013-2.078-76.686 1.963-124.73 9.946L67.3 12.749C35.421 18.062 18.2 21.766 6.004 25.934 1.244 27.561.828 27.778.874 28.61c.07 1.214.828 1.121 9.595-1.176 9.072-2.377 17.15-3.92 39.246-7.496C123.565 7.986 157.869 4.492 195.942 5.046c7.461.108 19.25 1.696 19.17 2.582-.107 1.183-7.874 4.31-25.75 10.366-21.992 7.45-35.43 12.534-36.701 13.884-2.173 2.308-.202 4.407 4.442 4.734 2.654.187 3.263.157 15.593-.78 35.401-2.686 57.944-3.488 88.365-3.143 46.327.526 75.721 2.23 130.788 7.584 19.787 1.924 20.814 1.98 24.557 1.332l.066-.011c1.201-.203 1.53-1.825.399-2.335-2.911-1.31-4.893-1.604-22.048-3.261-57.509-5.556-87.871-7.36-132.059-7.842-23.239-.254-33.617-.116-50.627.674-11.629.54-42.371 2.494-46.696 2.967-2.359.259 8.133-3.625 26.504-9.81 23.239-7.825 27.934-10.149 28.304-14.005.417-4.348-3.529-6-16.878-7.066Z")
-                                      ),
-                                      "with Claude"
-                                  ),
-                              ),
-                              P(cls="mt-6 text-xl text-blue-100 max-w-2xl mx-auto")(
-                                  "Upload a PDF document and ask questions about it. Claude will analyze the document and provide answers based on its content."
-                              ),
-                          ),
+    return Main(
+        Title("Claude - PDF Question Answering System"),
+        Div(cls="mt-16 flex flex-col justify-center")(
+            Div(cls="max-w-4xl mx-auto")(
+                # Header
+                Div(cls="text-center mb-16")(
+                    H1(cls="text-5xl font-extrabold tracking-tight text-white sm:text-6xl")(
+                        "PDF Chat ",
+                        Span(cls="relative whitespace-nowrap")(
+                            Svg(cls="absolute top-2/3 left-0 h-[0.58em] w-full fill-white/30",
+                                aria_hidden="true",
+                                viewBox="0 0 418 42", preserveAspectRatio="none")(
+                                Path(
+                                    d="M203.371.916c-26.013-2.078-76.686 1.963-124.73 9.946L67.3 12.749C35.421 18.062 18.2 21.766 6.004 25.934 1.244 27.561.828 27.778.874 28.61c.07 1.214.828 1.121 9.595-1.176 9.072-2.377 17.15-3.92 39.246-7.496C123.565 7.986 157.869 4.492 195.942 5.046c7.461.108 19.25 1.696 19.17 2.582-.107 1.183-7.874 4.31-25.75 10.366-21.992 7.45-35.43 12.534-36.701 13.884-2.173 2.308-.202 4.407 4.442 4.734 2.654.187 3.263.157 15.593-.78 35.401-2.686 57.944-3.488 88.365-3.143 46.327.526 75.721 2.23 130.788 7.584 19.787 1.924 20.814 1.98 24.557 1.332l.066-.011c1.201-.203 1.53-1.825.399-2.335-2.911-1.31-4.893-1.604-22.048-3.261-57.509-5.556-87.871-7.36-132.059-7.842-23.239-.254-33.617-.116-50.627.674-11.629.54-42.371 2.494-46.696 2.967-2.359.259 8.133-3.625 26.504-9.81 23.239-7.825 27.934-10.149 28.304-14.005.417-4.348-3.529-6-16.878-7.066Z")
+                            ),
+                            "with Claude"
+                        ),
+                    ),
+                    P(cls="mt-6 text-xl text-blue-100 max-w-2xl mx-auto")(
+                        "Upload a PDF document and ask questions about it. Claude will analyze the document and provide answers based on its content."
+                    ),
+                ),
 
-                          # Upload form with glass effect
-                          Div(id="chat-container")(
-                              render_upload_form()
-                          )
-                      )
-                  )
-                  )
+                # Upload form with glass effect
+                Div(id="chat-container")(
+                    render_upload_form()
+                )
+            )
+        )
+    )
 
 
 def render_upload_form():
@@ -1087,33 +770,33 @@ async def post(request):
         print(f"Original image size: {original_size:.2f} MB")
 
         # Always resize the image to ensure it's well under the limit
-        try:
-            image_bytes = resize_image_for_claude(image_bytes)
-            final_size = len(image_bytes) / (1024 * 1024)
-            print(f"Resized image size: {final_size:.2f} MB")
-
-            # Double-check size is within limits
-            if len(image_bytes) > 5 * 1024 * 1024:
-                raise ValueError(f"Image still too large after resizing: {final_size:.2f} MB")
-
-        except Exception as resize_error:
-            print(f"Error resizing image: {resize_error}")
-            return Div(cls="flex items-start mb-6 fade-in")(
-                Div(cls="flex-shrink-0 w-8 h-8 rounded-full ai-avatar flex items-center justify-center text-white mr-3")(
-                    Svg(cls="w-4 h-4", fill="none", stroke="currentColor", viewBox="0 0 24 24",
-                        xmlns="http://www.w3.org/2000/svg")(
-                        Path(stroke_linecap="round", stroke_linejoin="round", stroke_width="2",
-                             d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z")
-                    )
-                ),
-                Div(cls="flex-1")(
-                    Div(cls="mb-1 text-xs text-gray-500")("Claude"),
-                    Div(cls="chat-bubble-ai p-3 inline-block max-w-[85%]")(
-                        P(cls="text-gray-800")(
-                            f"I had trouble processing the image from your document ({original_size:.1f}MB). The PDF page may be too complex or large. Try asking about a specific section instead.")
-                    )
+        # try:
+        #     image_bytes = resize_image_for_claude(image_bytes)
+        #     final_size = len(image_bytes) / (1024 * 1024)
+        #     print(f"Resized image size: {final_size:.2f} MB")
+        #
+        #     # Double-check size is within limits
+        #     if len(image_bytes) > 5 * 1024 * 1024:
+        #         raise ValueError(f"Image still too large after resizing: {final_size:.2f} MB")
+        #
+        # except Exception as resize_error:
+        #     print(f"Error resizing image: {resize_error}")
+        return Div(cls="flex items-start mb-6 fade-in")(
+            Div(cls="flex-shrink-0 w-8 h-8 rounded-full ai-avatar flex items-center justify-center text-white mr-3")(
+                Svg(cls="w-4 h-4", fill="none", stroke="currentColor", viewBox="0 0 24 24",
+                    xmlns="http://www.w3.org/2000/svg")(
+                    Path(stroke_linecap="round", stroke_linejoin="round", stroke_width="2",
+                         d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z")
+                )
+            ),
+            Div(cls="flex-1")(
+                Div(cls="mb-1 text-xs text-gray-500")("Claude"),
+                Div(cls="chat-bubble-ai p-3 inline-block max-w-[85%]")(
+                    P(cls="text-gray-800")(
+                        f"I had trouble processing the image from your document ({original_size:.1f}MB). The PDF page may be too complex or large. Try asking about a specific section instead.")
                 )
             )
+        )
 
         # Ask Claude
         print("Sending query to Claude")
