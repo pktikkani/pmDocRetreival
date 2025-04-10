@@ -1,3 +1,4 @@
+from bs4 import Script
 from fasthtml.common import *
 import os
 import base64
@@ -5,6 +6,7 @@ import uuid
 import io
 from pathlib import Path
 from PIL import Image
+from fasthtml.js import MarkdownJS
 from RAGModel import RAGMultiModalModel
 from claudette import Chat, models
 
@@ -22,82 +24,82 @@ uploads_dir.mkdir(exist_ok=True)
 
 
 # # Function to resize an image to fit within Claude's 5MB limit
-# def resize_image_for_claude(image_bytes):
-#     """
-#     Resize an image to fit within Claude's 5MB limit with a safety margin
-#     """
-#     # Load the image from bytes
-#     img = Image.open(io.BytesIO(image_bytes))
-#
-#     # Define max size (4.7MB to allow for overhead when sending)
-#     MAX_SIZE_BYTES = 4.7 * 1024 * 1024
-#
-#     # Start with original size
-#     quality = 90  # Start with slightly lower quality
-#     output = io.BytesIO()
-#
-#     # Try to compress the image while keeping its dimensions
-#     img.save(output, format='JPEG', quality=quality)
-#
-#     # If the image is still too large, reduce quality
-#     while output.tell() > MAX_SIZE_BYTES and quality > 10:
-#         output = io.BytesIO()
-#         quality -= 10
-#         print(f"Reducing image quality to {quality}")
-#         img.save(output, format='JPEG', quality=quality)
-#
-#     # If reducing quality didn't work, resize the image
-#     if output.tell() > MAX_SIZE_BYTES:
-#         # Calculate new dimensions while maintaining aspect ratio
-#         aspect = img.width / img.height
-#
-#         # Start with a reasonable reduction
-#         scale_factor = 0.8
-#         new_width = int(img.width * scale_factor)
-#         new_height = int(new_width / aspect)
-#
-#         while output.tell() > MAX_SIZE_BYTES and new_width > 100:
-#             # Resize the image
-#             print(f"Resizing image to {new_width}x{new_height}")
-#             resized_img = img.resize((new_width, new_height), Image.LANCZOS)
-#
-#             # Save to buffer
-#             output = io.BytesIO()
-#             resized_img.save(output, format='JPEG', quality=quality)
-#
-#             # Further reduce dimensions if needed
-#             scale_factor *= 0.8
-#             new_width = int(img.width * scale_factor)
-#             new_height = int(new_width / aspect)
-#
-#     # Final size check
-#     output.seek(0)
-#     final_size = output.tell()
-#     print(f"Final image size: {final_size / (1024 * 1024):.2f} MB")
-#
-#     if final_size > 5 * 1024 * 1024:
-#         print("Warning: Image is still too large for Claude API")
-#
-#         # Last resort: force a smaller size with lower quality
-#         output = io.BytesIO()
-#         max_dimension = 1000  # Set a hard maximum dimension
-#         if img.width > img.height:
-#             new_size = (max_dimension, int(max_dimension / aspect))
-#         else:
-#             new_size = (int(max_dimension * aspect), max_dimension)
-#
-#         resized_img = img.resize(new_size, Image.LANCZOS)
-#         resized_img.save(output, format='JPEG', quality=60)
-#         output.seek(0)
-#         print(f"Emergency resize: {output.tell() / (1024 * 1024):.2f} MB")
-#
-#     return output.getvalue()
+def resize_image_for_claude(image_bytes):
+    """
+    Resize an image to fit within Claude's 5MB limit with a safety margin
+    """
+    # Load the image from bytes
+    img = Image.open(io.BytesIO(image_bytes))
+
+    # Define max size (4.7MB to allow for overhead when sending)
+    MAX_SIZE_BYTES = 4.7 * 1024 * 1024
+
+    # Start with original size
+    quality = 90  # Start with slightly lower quality
+    output = io.BytesIO()
+
+    # Try to compress the image while keeping its dimensions
+    img.save(output, format='JPEG', quality=quality)
+
+    # If the image is still too large, reduce quality
+    while output.tell() > MAX_SIZE_BYTES and quality > 10:
+        output = io.BytesIO()
+        quality -= 10
+        print(f"Reducing image quality to {quality}")
+        img.save(output, format='JPEG', quality=quality)
+
+    # If reducing quality didn't work, resize the image
+    if output.tell() > MAX_SIZE_BYTES:
+        # Calculate new dimensions while maintaining aspect ratio
+        aspect = img.width / img.height
+
+        # Start with a reasonable reduction
+        scale_factor = 0.8
+        new_width = int(img.width * scale_factor)
+        new_height = int(new_width / aspect)
+
+        while output.tell() > MAX_SIZE_BYTES and new_width > 100:
+            # Resize the image
+            print(f"Resizing image to {new_width}x{new_height}")
+            resized_img = img.resize((new_width, new_height), Image.LANCZOS)
+
+            # Save to buffer
+            output = io.BytesIO()
+            resized_img.save(output, format='JPEG', quality=quality)
+
+            # Further reduce dimensions if needed
+            scale_factor *= 0.8
+            new_width = int(img.width * scale_factor)
+            new_height = int(new_width / aspect)
+
+    # Final size check
+    output.seek(0)
+    final_size = output.tell()
+    print(f"Final image size: {final_size / (1024 * 1024):.2f} MB")
+
+    if final_size > 5 * 1024 * 1024:
+        print("Warning: Image is still too large for Claude API")
+
+        # Last resort: force a smaller size with lower quality
+        output = io.BytesIO()
+        max_dimension = 1000  # Set a hard maximum dimension
+        if img.width > img.height:
+            new_size = (max_dimension, int(max_dimension / aspect))
+        else:
+            new_size = (int(max_dimension * aspect), max_dimension)
+
+        resized_img = img.resize(new_size, Image.LANCZOS)
+        resized_img.save(output, format='JPEG', quality=60)
+        output.seek(0)
+        print(f"Emergency resize: {output.tell() / (1024 * 1024):.2f} MB")
+
+    return output.getvalue()
 
 
 hdrs = (
     Meta(name="viewport", content="width=device-width, initial-scale=1.0"),
     Link(rel="stylesheet", href="static/output.css", type="text/css"),
-    # Add JavaScript for form handling and animation
+    MarkdownJS(),
     Script("""
         document.addEventListener('DOMContentLoaded', function() {
             const uploadForm = document.getElementById('upload-form');
@@ -311,7 +313,7 @@ hdrs = (
                             </svg>
                         </div>
                         <div class="flex-1">
-                            <div class="mb-1 text-xs text-gray-500">Claude</div>
+                            <div class="mb-1 text-xs text-gray-500">AI</div>
                             <div class="chat-bubble-ai p-3 inline-block max-w-[85%]">
                                 <div class="flex items-center space-x-2">
                                     <span class="inline-block pulse text-blue-500">⚫</span>
@@ -432,7 +434,7 @@ hdrs = (
                                 </svg>
                             </div>
                             <div class="flex-1">
-                                <div class="mb-1 text-xs text-gray-500">Claude</div>
+                                <div class="mb-1 text-xs text-gray-500">AI</div>
                                 <div class="chat-bubble-ai p-3 inline-block max-w-[85%]">
                                     <p class="text-gray-800">I encountered an error displaying the response.</p>
                                 </div>
@@ -495,13 +497,13 @@ app, rt = fast_app(hdrs=hdrs, pico=False, live=False)
 @rt("/")
 def get():
     return Main(
-        Title("Claude - PDF Question Answering System"),
+        Title("Document Retriever"),
         Div(cls="mt-16 flex flex-col justify-center")(
             Div(cls="max-w-4xl mx-auto")(
                 # Header
                 Div(cls="text-center mb-16")(
                     H1(cls="text-5xl font-extrabold tracking-tight text-white sm:text-6xl")(
-                        "PDF Chat ",
+                        "Document Retriever",
                         Span(cls="relative whitespace-nowrap")(
                             Svg(cls="absolute top-2/3 left-0 h-[0.58em] w-full fill-white/30",
                                 aria_hidden="true",
@@ -509,11 +511,11 @@ def get():
                                 Path(
                                     d="M203.371.916c-26.013-2.078-76.686 1.963-124.73 9.946L67.3 12.749C35.421 18.062 18.2 21.766 6.004 25.934 1.244 27.561.828 27.778.874 28.61c.07 1.214.828 1.121 9.595-1.176 9.072-2.377 17.15-3.92 39.246-7.496C123.565 7.986 157.869 4.492 195.942 5.046c7.461.108 19.25 1.696 19.17 2.582-.107 1.183-7.874 4.31-25.75 10.366-21.992 7.45-35.43 12.534-36.701 13.884-2.173 2.308-.202 4.407 4.442 4.734 2.654.187 3.263.157 15.593-.78 35.401-2.686 57.944-3.488 88.365-3.143 46.327.526 75.721 2.23 130.788 7.584 19.787 1.924 20.814 1.98 24.557 1.332l.066-.011c1.201-.203 1.53-1.825.399-2.335-2.911-1.31-4.893-1.604-22.048-3.261-57.509-5.556-87.871-7.36-132.059-7.842-23.239-.254-33.617-.116-50.627.674-11.629.54-42.371 2.494-46.696 2.967-2.359.259 8.133-3.625 26.504-9.81 23.239-7.825 27.934-10.149 28.304-14.005.417-4.348-3.529-6-16.878-7.066Z")
                             ),
-                            "with Claude"
+
                         ),
                     ),
                     P(cls="mt-6 text-xl text-blue-100 max-w-2xl mx-auto")(
-                        "Upload a PDF document and ask questions about it. Claude will analyze the document and provide answers based on its content."
+                        "Upload a PDF document and ask questions about it."
                     ),
                 ),
 
@@ -770,39 +772,40 @@ async def post(request):
         print(f"Original image size: {original_size:.2f} MB")
 
         # Always resize the image to ensure it's well under the limit
-        # try:
-        #     image_bytes = resize_image_for_claude(image_bytes)
-        #     final_size = len(image_bytes) / (1024 * 1024)
-        #     print(f"Resized image size: {final_size:.2f} MB")
-        #
-        #     # Double-check size is within limits
-        #     if len(image_bytes) > 5 * 1024 * 1024:
-        #         raise ValueError(f"Image still too large after resizing: {final_size:.2f} MB")
-        #
-        # except Exception as resize_error:
-        #     print(f"Error resizing image: {resize_error}")
-        return Div(cls="flex items-start mb-6 fade-in")(
-            Div(cls="flex-shrink-0 w-8 h-8 rounded-full ai-avatar flex items-center justify-center text-white mr-3")(
-                Svg(cls="w-4 h-4", fill="none", stroke="currentColor", viewBox="0 0 24 24",
-                    xmlns="http://www.w3.org/2000/svg")(
-                    Path(stroke_linecap="round", stroke_linejoin="round", stroke_width="2",
-                         d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z")
-                )
-            ),
-            Div(cls="flex-1")(
-                Div(cls="mb-1 text-xs text-gray-500")("Claude"),
-                Div(cls="chat-bubble-ai p-3 inline-block max-w-[85%]")(
-                    P(cls="text-gray-800")(
-                        f"I had trouble processing the image from your document ({original_size:.1f}MB). The PDF page may be too complex or large. Try asking about a specific section instead.")
+        try:
+            image_bytes = resize_image_for_claude(image_bytes)
+            final_size = len(image_bytes) / (1024 * 1024)
+            print(f"Resized image size: {final_size:.2f} MB")
+
+            # Double-check size is within limits
+            if len(image_bytes) > 5 * 1024 * 1024:
+                raise ValueError(f"Image still too large after resizing: {final_size:.2f} MB")
+
+        except Exception as resize_error:
+            print(f"Error resizing image: {resize_error}")
+            return Div(cls="flex items-start mb-6 fade-in")(
+                Div(cls="flex-shrink-0 w-8 h-8 rounded-full ai-avatar flex items-center justify-center text-white mr-3")(
+                    Svg(cls="w-4 h-4", fill="none", stroke="currentColor", viewBox="0 0 24 24",
+                        xmlns="http://www.w3.org/2000/svg")(
+                        Path(stroke_linecap="round", stroke_linejoin="round", stroke_width="2",
+                             d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z")
+                    )
+                ),
+                Div(cls="flex-1")(
+                    Div(cls="mb-1 text-xs text-gray-500")("AI"),
+                    Div(cls="chat-bubble-ai p-3 inline-block max-w-[85%]")(
+                        P(cls="text-gray-800")(
+                            f"I had trouble processing the image from your document ({original_size:.1f}MB). The PDF page may be too complex or large. Try asking about a specific section instead.")
+                    )
                 )
             )
-        )
 
         # Ask Claude
         print("Sending query to Claude")
         chat = Chat(models[1])  # Using Claude Sonnet
         result = chat([image_bytes, query])
         print("Received response from Claude")
+        ai_text = result.content[0].text if result.content else "Sorry, I couldn't generate a response."
 
         # Return just Claude's response - the user message is already added by JavaScript
         return Div(cls="flex items-start mb-6 fade-in")(
@@ -816,7 +819,7 @@ async def post(request):
             Div(cls="flex-1")(
                 Div(cls="mb-1 text-xs text-gray-500")("Claude"),
                 Div(cls="chat-bubble-ai p-3 inline-block max-w-[85%]")(
-                    Div(cls="text-gray-800 prose prose-sm")(result.content[0].text)
+                    Div(cls="text-gray-800 prose prose-sm max-w-none marked")(ai_text)
                 )
             )
         )
