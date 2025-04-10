@@ -19,8 +19,8 @@ RAG = RAGMultiModalModel.from_pretrained("nomic-ai/colnomic-embed-multimodal-7b"
 uploads_dir = Path("uploads")
 uploads_dir.mkdir(exist_ok=True)
 
-# Create a static directory for images if it doesn't exist
 
+# Create a static directory for images if it doesn't exist
 
 
 # # Function to resize an image to fit within Claude's 5MB limit
@@ -78,7 +78,7 @@ def resize_image_for_claude(image_bytes):
     print(f"Final image size: {final_size / (1024 * 1024):.2f} MB")
 
     if final_size > 5 * 1024 * 1024:
-        print("Warning: Image is still too large for Claude API")
+        print("Warning: Image is still too large for AI API")
 
         # Last resort: force a smaller size with lower quality
         output = io.BytesIO()
@@ -273,16 +273,16 @@ hdrs = (
                 console.log("Cannot add user message - container not found or text is empty");
                 return;
             }
-        
+
             // Remove empty state if present
             const emptyState = chatContainer.querySelector('.flex.flex-col.items-center.justify-center');
             if (emptyState) {
                 emptyState.remove();
             }
-            
+
             // Generate unique ID for message
             const messageId = 'user-message-' + Date.now();
-        
+
             // Create user message HTML
             const userMessageHtml = `
                 <div class="flex items-start mb-6 fade-in" id="${messageId}">
@@ -299,10 +299,10 @@ hdrs = (
                     </div>
                 </div>
             `;
-        
+
             // Add user message to chat
             chatContainer.insertAdjacentHTML('beforeend', userMessageHtml);
-        
+
             // Only add thinking message if it doesn't already exist
             if (!document.getElementById('ai-thinking')) {
                 const thinkingMessageHtml = `
@@ -325,35 +325,35 @@ hdrs = (
                         </div>
                     </div>
                 `;
-        
+
                 chatContainer.insertAdjacentHTML('beforeend', thinkingMessageHtml);
             }
-        
+
             // Scroll to bottom
             scrollToBottom();
-        
+
             return messageId;
         }
 
 
-        
+
         // Setup function for chat form submission with animation
         function setupChatForm() {
             const chatForm = document.querySelector('form[hx-post="/ask"]');
             const chatInput = document.querySelector('input[name="query"]');
-        
+
             if (chatForm && chatInput) {
                 // Remove HTMX attributes to prevent double processing
                 chatForm.removeAttribute('hx-post');
                 chatForm.removeAttribute('hx-target');
                 chatForm.removeAttribute('hx-swap');
-                
+
                 // Remove any existing event listeners
                 chatForm.removeEventListener('submit', handleChatSubmit);
-        
+
                 // Add event listener for form submission
                 chatForm.addEventListener('submit', handleChatSubmit);
-        
+
                 // Add event listener for Enter key
                 chatInput.addEventListener('keydown', function(e) {
                     if (e.key === 'Enter' && !e.shiftKey) {
@@ -363,7 +363,7 @@ hdrs = (
                     }
                 });
             }
-        
+
             // Setup clear button
             const clearButton = document.getElementById('clear-chat-button');
             if (clearButton) {
@@ -376,32 +376,32 @@ hdrs = (
         // This is the improved handleChatSubmit function that should correctly process responses
         function handleChatSubmit(e) {
             e.preventDefault(); // Prevent the default form submission
-            
+
             const form = e.currentTarget;
             const chatInput = form.querySelector('input[name="query"]');
             const query = chatInput.value.trim();
             console.log("Form submission - Query:", query);
-        
+
             if (!query) {
                 console.log("Empty query, preventing form submission");
                 return;
             }
-        
+
             // Add user message immediately
             addUserMessage(query);
-            
+
             // Clear input
             chatInput.value = '';
-            
+
             // Get the filename
             const filenameInput = form.querySelector('input[name="filename"]');
             const filename = filenameInput.value;
-            
+
             // Make our own fetch request
             const formData = new FormData();
             formData.append('query', query);
             formData.append('filename', filename);
-            
+
             fetch('/ask', {
                 method: 'POST',
                 body: formData
@@ -412,18 +412,31 @@ hdrs = (
             })
             .then(html => {
                 console.log("Received HTML response:", html.substring(0, 100) + "...");
-                
+
                 // Remove thinking message
                 const thinking = document.getElementById('ai-thinking');
                 if (thinking) thinking.remove();
-                
+
                 // Append the response HTML directly to the chat container
                 const chatContainer = document.getElementById('responses');
-                
+
                 try {
                     // Direct insertion of HTML
                     chatContainer.insertAdjacentHTML('beforeend', html);
                     console.log("Response added to chat");
+                    // --- BEGIN ADDED CODE ---
+                    // Manually trigger htmx:load on the container AFTER inserting AI response
+                    if (typeof htmx !== 'undefined') {
+                        try {
+                            htmx.trigger(chatContainer, "htmx:load", {}); // Trigger on the container
+                            console.log("Manually triggered htmx:load on #responses for AI response.");
+                        } catch (htmxError) {
+                            console.error("Error triggering htmx:load for AI response:", htmxError);
+                        }
+                    } else {
+                        console.log("htmx object not found, cannot trigger load for AI response.");
+                    }
+                    // --- END ADDED CODE ---
                 } catch (err) {
                     console.error("Error inserting response:", err);
                     chatContainer.insertAdjacentHTML('beforeend', `
@@ -442,13 +455,13 @@ hdrs = (
                         </div>
                     `);
                 }
-                
+
                 // Scroll to bottom
                 scrollToBottom();
             })
             .catch(error => {
                 console.error('Error:', error);
-                
+
                 // Remove thinking message and show error
                 const thinking = document.getElementById('ai-thinking');
                 if (thinking) {
@@ -479,11 +492,11 @@ hdrs = (
             scrollToBottom();
             setupChatForm();
         });
-        
+
         document.addEventListener('htmx:afterSettle', function(event) {
             setupChatForm();
         });
-        
+
         document.addEventListener('DOMContentLoaded', function() {
             setupChatForm();
         });
@@ -733,7 +746,7 @@ async def post(request):
                 )
             ),
             Div(cls="flex-1")(
-                Div(cls="mb-1 text-xs text-gray-500")("Claude"),
+                Div(cls="mb-1 text-xs text-gray-500")("AI"),
                 Div(cls="chat-bubble-ai p-3 inline-block max-w-[85%]")(
                     P(cls="text-gray-800")(
                         "I'm having trouble processing your request. Could you try asking another question?")
@@ -757,7 +770,7 @@ async def post(request):
                     )
                 ),
                 Div(cls="flex-1")(
-                    Div(cls="mb-1 text-xs text-gray-500")("Claude"),
+                    Div(cls="mb-1 text-xs text-gray-500")("AI"),
                     Div(cls="chat-bubble-ai p-3 inline-block max-w-[85%]")(
                         P(cls="text-gray-800")(
                             "I couldn't find any relevant information in the document to answer your question. Could you try rephrasing it?")
@@ -817,7 +830,7 @@ async def post(request):
                 )
             ),
             Div(cls="flex-1")(
-                Div(cls="mb-1 text-xs text-gray-500")("Claude"),
+                Div(cls="mb-1 text-xs text-gray-500")("AI"),
                 Div(cls="chat-bubble-ai p-3 inline-block max-w-[85%]")(
                     Div(cls="text-gray-800 prose prose-sm max-w-none marked")(ai_text)
                 )
@@ -829,7 +842,7 @@ async def post(request):
 
         # More user-friendly error message
         if "image exceeds 5 MB maximum" in error_message:
-            friendly_message = "The PDF page is too large for Claude to process. Try asking about a specific section of the document or a different page."
+            friendly_message = "The PDF page is too large for AI to process. Try asking about a specific section of the document or a different page."
         else:
             friendly_message = "I encountered an issue while processing your question. Please try again or ask a different question."
 

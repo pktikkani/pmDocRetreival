@@ -1,6 +1,11 @@
 import base64
+import io
 import os
 import sys
+
+import torch
+from PIL import Image
+from transformers import AutoModelForCausalLM, AutoProcessor
 
 from RAGModel import RAGMultiModalModel
 from claudette import *
@@ -31,7 +36,12 @@ results = RAG.search(query, k=1)
 
 image_bytes = base64.b64decode(results[0].base64)
 
+
+
 chat = Chat(models[1])
 # models is a claudette helper that contains the list of models available on your account, as of 2024-09-06, [1] is Claude Sonnet 3.5:
 result = chat([image_bytes, query])
 print(result.content[0].text)
+
+
+

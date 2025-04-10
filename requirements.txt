@@ -7,3 +7,5 @@ colpali-engine
 srsly
 pdf2image
 python-fasthtml
+transformers
+hf_xet
