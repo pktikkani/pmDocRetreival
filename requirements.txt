@@ -9,3 +9,14 @@ pdf2image
 python-fasthtml
 transformers
 hf_xet
+qdrant-client>=1.12.0
+PyMuPDF
+Pillow
+datasets
+stamina
+pinecone
+python-dotenv
+numpy>=1.24.0
+scikit-learn>=1.3.0
+pypdf
+opencv-python
